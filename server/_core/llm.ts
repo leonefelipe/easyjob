@@ -140,56 +140,48 @@ const normalizeMessage = (message: Message) => {
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) throw new Error("DEEPSEEK_API_KEY is not configured");
-
-  const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
-    maxTokens,
-    max_tokens,
-  } = params;
-
-  const payload: any = {
-    model: "deepseek-chat",
-    messages: messages.map(normalizeMessage),
-    max_tokens: maxTokens || max_tokens || 4096,
+  // Simulação da resposta da API do Manus para análise de currículo
+  const mockResponse = {
+    ats_score: 85,
+    strengths: [
+      "Experiência sólida em desenvolvimento Full-Stack.",
+      "Conhecimento em tecnologias modernas como Node.js, TypeScript e React.",
+      "Habilidade em otimização de performance e segurança.",
+    ],
+    weaknesses: [
+      "Falta de experiência em gerenciamento de projetos ágeis.",
+      "Pouca menção a métricas de impacto em projetos anteriores.",
+    ],
+    improvements: [
+      "Adicionar certificações em metodologias ágeis (Scrum, Kanban).",
+      "Quantificar resultados em projetos anteriores (ex: 'reduzi o tempo de carregamento em X%').",
+      "Incluir projetos pessoais ou contribuições open-source para demonstrar proatividade.",
+    ],
+    rewritten_bullets: [
+      "Desenvolvi e otimizei aplicações web e mobile, resultando em um aumento de 20% na satisfação do usuário.",
+      "Liderei a implementação de novas funcionalidades, entregando projetos 15% antes do prazo.",
+      "Colaborei com equipes multifuncionais para garantir a entrega contínua de software de alta qualidade.",
+    ],
   };
 
-  if (tools && tools.length > 0) payload.tools = tools;
-  const tc = toolChoice || tool_choice;
-  if (tc) payload.tool_choice = tc;
-
-  const format = responseFormat || response_format;
-  if (format) payload.response_format = format;
-  else {
-    const schema = outputSchema || output_schema;
-    if (schema) {
-      payload.response_format = {
-        type: "json_object"
-      };
-    }
-  }
-
-  const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
+  return {
+    id: `manus-mock-${Date.now()}`,
+    created: Math.floor(Date.now() / 1000),
+    model: "manus-mock-llm",
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: JSON.stringify(mockResponse),
+        },
+        finish_reason: "stop",
+      },
+    ],
+    usage: {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
     },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`DeepSeek API invoke failed: ${response.status} ${response.statusText} – ${errorText}`);
-  }
-
-  return (await response.json()) as InvokeResult;
+  };
 }
