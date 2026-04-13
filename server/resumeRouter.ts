@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { publicProcedure, router } from "./_core/trpc";
-import { invokeLLM } from "./llm";
+import { invokeLLM } from "./_core/llm";
 
 export const resumeRouter = router({
   analyze: publicProcedure
