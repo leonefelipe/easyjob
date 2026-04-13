@@ -142,8 +142,8 @@ const normalizeMessage = (message: Message) => {
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not configured");
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) throw new Error("DEEPSEEK_API_KEY is not configured");
 
   const {
     messages,
@@ -159,9 +159,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: any = {
-    model: "google/gemini-flash-1.5-exp:free",
+    model: "deepseek-chat",
     messages: messages.map(normalizeMessage),
-    max_tokens: maxTokens || max_tokens || 8192,
+    max_tokens: maxTokens || max_tokens || 4096,
   };
 
   if (tools && tools.length > 0) payload.tools = tools;
@@ -174,30 +174,23 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     const schema = outputSchema || output_schema;
     if (schema) {
       payload.response_format = {
-        type: "json_schema",
-        json_schema: {
-          name: schema.name,
-          schema: schema.schema,
-          strict: schema.strict ?? true,
-        },
+        type: "json_object"
       };
     }
   }
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://easyjob-5db3.onrender.com/",
-      "X-Title": "EasyJob AI",
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload ),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenRouter invoke failed: ${response.status} ${response.statusText} – ${errorText}`);
+    throw new Error(`DeepSeek API invoke failed: ${response.status} ${response.statusText} – ${errorText}`);
   }
 
   return (await response.json()) as InvokeResult;
