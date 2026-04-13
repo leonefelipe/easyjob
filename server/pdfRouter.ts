@@ -1,205 +1,313 @@
-import { ENV } from "./env";
+import { z } from "zod";
+import { publicProcedure, router } from "./_core/trpc";
+import puppeteer from "puppeteer";
 
-export type Role = "system" | "user" | "assistant" | "tool" | "function";
+function buildResumeHtml(resumeText: string, lang: "pt" | "en" = "pt"): string {
+  const lines = resumeText.split("\n");
+  let html = "";
+  let inSection = false;
 
-export type TextContent = {
-  type: "text";
-  text: string;
-};
+  const sectionHeaders = [
+    "RESUMO PROFISSIONAL", "PROFESSIONAL SUMMARY",
+    "COMPETENCIAS PRINCIPAIS", "CORE COMPETENCIES",
+    "COMPETÊNCIAS PRINCIPAIS",
+    "EXPERIENCIA PROFISSIONAL", "PROFESSIONAL EXPERIENCE",
+    "EXPERIÊNCIA PROFISSIONAL",
+    "FORMACAO ACADEMICA", "EDUCATION",
+    "FORMAÇÃO ACADÊMICA",
+    "IDIOMAS", "LANGUAGES",
+    "CERTIFICACOES", "CERTIFICATIONS",
+    "CERTIFICAÇÕES",
+    "HABILIDADES", "SKILLS",
+    "CURSOS", "COURSES",
+    "INFORMACOES ADICIONAIS", "ADDITIONAL INFORMATION",
+    "INFORMAÇÕES ADICIONAIS",
+    "PUBLICACOES", "PUBLICATIONS",
+    "PUBLICAÇÕES",
+    "VOLUNTARIADO", "VOLUNTEER",
+  ];
 
-export type ImageContent = {
-  type: "image_url";
-  image_url: {
-    url: string;
-    detail?: "auto" | "low" | "high";
+  const isSection = (line: string) => {
+    const trimmed = line.trim().toUpperCase();
+    return sectionHeaders.some(h => trimmed === h || trimmed.startsWith(h + " ") || trimmed.startsWith(h + ":"));
   };
-};
 
-export type FileContent = {
-  type: "file_url";
-  file_url: {
-    url: string;
-    mime_type?: "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4" ;
+  const isSubSection = (line: string) => {
+    const trimmed = line.trim();
+    return (
+      trimmed === trimmed.toUpperCase() &&
+      trimmed.length > 2 &&
+      trimmed.length < 60 &&
+      !trimmed.startsWith("-") &&
+      !trimmed.startsWith("•") &&
+      !trimmed.match(/^\d/) &&
+      !isSection(trimmed)
+    );
   };
-};
 
-export type MessageContent = string | TextContent | ImageContent | FileContent;
-
-export type Message = {
-  role: Role;
-  content: MessageContent | MessageContent[];
-  name?: string;
-  tool_call_id?: string;
-};
-
-export type Tool = {
-  type: "function";
-  function: {
-    name: string;
-    description?: string;
-    parameters?: Record<string, unknown>;
+  const isBullet = (line: string) => {
+    const trimmed = line.trim();
+    return trimmed.startsWith("- ") || trimmed.startsWith("• ") || trimmed.startsWith("* ");
   };
-};
 
-export type ToolChoicePrimitive = "none" | "auto" | "required";
-export type ToolChoiceByName = { name: string };
-export type ToolChoiceExplicit = {
-  type: "function";
-  function: {
-    name: string;
+  const isContactLine = (line: string) => {
+    return line.includes("|") || line.includes("@") || line.includes("+55") || line.includes("linkedin");
   };
-};
 
-export type ToolChoice =
-  | ToolChoicePrimitive
-  | ToolChoiceByName
-  | ToolChoiceExplicit;
+  let nameProcessed = false;
+  let titleProcessed = false;
+  let contactProcessed = false;
+  let bulletGroup = false;
 
-export type InvokeParams = {
-  messages: Message[];
-  tools?: Tool[];
-  toolChoice?: ToolChoice;
-  tool_choice?: ToolChoice;
-  maxTokens?: number;
-  max_tokens?: number;
-  outputSchema?: OutputSchema;
-  output_schema?: OutputSchema;
-  responseFormat?: ResponseFormat;
-  response_format?: ResponseFormat;
-};
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) {
+      if (bulletGroup) {
+        html += `</ul>`;
+        bulletGroup = false;
+      }
+      continue;
+    }
 
-export type ToolCall = {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
-};
+    if (!nameProcessed && i === 0) {
+      html += `<div class="candidate-name">${line}</div>`;
+      nameProcessed = true;
+      continue;
+    }
 
-export type InvokeResult = {
-  id: string;
-  created: number;
-  model: string;
-  choices: Array<{
-    index: number;
-    message: {
-      role: Role;
-      content: string | Array<TextContent | ImageContent | FileContent>;
-      tool_calls?: ToolCall[];
-    };
-    finish_reason: string | null;
-  }>;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-};
+    if (!titleProcessed && i === 1) {
+      html += `<div class="candidate-title">${line}</div>`;
+      titleProcessed = true;
+      continue;
+    }
 
-export type JsonSchema = {
-  name: string;
-  schema: Record<string, unknown>;
-  strict?: boolean;
-};
+    if (!contactProcessed && (i === 2 || isContactLine(line)) && !isSection(line)) {
+      html += `<div class="contact-line">${line}</div>`;
+      if (i === 2) { contactProcessed = true; }
+      continue;
+    }
 
-export type OutputSchema = JsonSchema;
+    if (isSection(line)) {
+      if (bulletGroup) { html += `</ul>`; bulletGroup = false; }
+      if (inSection) html += `</div>`;
+      html += `<div class="section">`;
+      html += `<div class="section-header">${line}</div>`;
+      html += `<div class="section-content">`;
+      inSection = true;
+      continue;
+    }
 
-export type ResponseFormat =
-  | { type: "text" }
-  | { type: "json_object" }
-  | { type: "json_schema"; json_schema: JsonSchema };
+    if (isSubSection(line)) {
+      if (bulletGroup) { html += `</ul>`; bulletGroup = false; }
+      html += `<div class="subsection-header">${line}</div>`;
+      continue;
+    }
 
-const assertApiKey = () => {
-  if (!process.env.GOOGLE_API_KEY) {
-    throw new Error("GOOGLE_API_KEY is not configured");
-  }
-};
+    if (isBullet(line)) {
+      const bulletText = line.replace(/^[-•*]\s+/, "");
+      if (!bulletGroup) {
+        html += `<ul class="bullet-list">`;
+        bulletGroup = true;
+      }
+      html += `<li>${bulletText}</li>`;
+      continue;
+    }
 
-const toGeminiRole = (role: Role): "user" | "model" => {
-  if (role === "assistant") return "model";
-  if (role === "user") return "user";
-  // For other roles like 'system', 'tool', 'function', we'll treat them as 'user' for simplicity
-  // as Gemini's API primarily supports 'user' and 'model' for direct conversation turns.
-  return "user";
-};
+    if (bulletGroup) {
+      html += `</ul>`;
+      bulletGroup = false;
+    }
 
-const normalizeGeminiContent = (content: MessageContent | MessageContent[]) => {
-  const parts: Array<{ text: string }> = [];
-  const contentArray = Array.isArray(content) ? content : [content];
-
-  for (const part of contentArray) {
-    if (typeof part === "string") {
-      parts.push({ text: part });
-    } else if (part.type === "text") {
-      parts.push({ text: part.text });
+    if (line.includes(" | ") || line.includes(" – ") || line.match(/\w+\s*[-–]\s*\w+/)) {
+      html += `<div class="job-line">${line}</div>`;
     } else {
-      // Ignoring image_url and file_url for now as per strict payload requirement for text-only
-      // and the specified endpoint is for generateContent (text-focused).
-      // A more robust solution would handle multimodal content if the endpoint supports it.
-      console.warn(`Unsupported content type encountered: ${part.type}. Skipping.`);
+      html += `<p class="body-text">${line}</p>`;
     }
   }
-  return parts;
-};
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+  if (bulletGroup) html += `</ul>`;
+  if (inSection) html += `</div></div>`;
 
-  const apiKey = process.env.GOOGLE_API_KEY;
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const title = lang === "en" ? "Optimized Resume" : "Currículo Otimizado";
 
-  const geminiMessages = params.messages.map(message => ({
-    role: toGeminiRole(message.role),
-    parts: normalizeGeminiContent(message.content),
-  }));
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap' );
 
-  const payload = {
-    contents: geminiMessages,
-    // generationConfig: {
-    //   maxOutputTokens: params.maxTokens || params.max_tokens || undefined,
-    // },
-    // The prompt explicitly asked for a specific payload structure, so other fields are omitted.
-    // If tool use or other generation configurations are needed, they would be added here
-    // following Gemini's API documentation.
-  };
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Gemini API invoke failed: ${response.status} ${response.statusText} – ${errorText}`
-    );
+  body {
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #1a1a2e;
+    background: #ffffff;
+    padding: 0;
   }
 
-  const result = await response.json();
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 18mm 20mm 18mm 20mm;
+    background: #ffffff;
+  }
 
-  // Map Gemini's response format back to InvokeResult
-  const invokeResult: InvokeResult = {
-    id: `gemini-${Date.now()}`,
-    created: Math.floor(Date.now() / 1000),
-    model: "gemini-1.5-flash",
-    choices: result.candidates.map((candidate: any, index: number) => ({
-      index: index,
-      message: {
-        role: "assistant", // Gemini's response role is typically 'model', mapping to 'assistant'
-        content: candidate.content.parts.map((part: any) => part.text).join("\n"),
-      },
-      finish_reason: candidate.finishReason || null,
-    })),
-    usage: {
-      prompt_tokens: result.usageMetadata?.promptTokenCount || 0,
-      completion_tokens: result.usageMetadata?.candidatesTokenCount || 0,
-      total_tokens: (result.usageMetadata?.promptTokenCount || 0) + (result.usageMetadata?.candidatesTokenCount || 0),
-    },
-  };
+  .header {
+    border-bottom: 2.5px solid #1e3a8a;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
 
-  return invokeResult;
+  .candidate-name {
+    font-size: 22pt;
+    font-weight: 700;
+    color: #1e3a8a;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+
+  .candidate-title {
+    font-size: 11pt;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 6px;
+  }
+
+  .contact-line {
+    font-size: 9pt;
+    color: #6b7280;
+    font-weight: 400;
+  }
+
+  .section {
+    margin-bottom: 14px;
+    page-break-inside: avoid;
+  }
+
+  .section-header {
+    font-size: 9pt;
+    font-weight: 700;
+    color: #1e3a8a;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    border-bottom: 1px solid #dbeafe;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+
+  .section-content {
+    padding-left: 0;
+  }
+
+  .subsection-header {
+    font-size: 10pt;
+    font-weight: 600;
+    color: #1f2937;
+    margin-top: 8px;
+    margin-bottom: 3px;
+  }
+
+  .job-line {
+    font-size: 10pt;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 4px;
+    margin-top: 6px;
+  }
+
+  .body-text {
+    font-size: 10pt;
+    color: #374151;
+    margin-bottom: 4px;
+    text-align: justify;
+  }
+
+  .bullet-list {
+    list-style: none;
+    padding: 0;
+    margin: 3px 0 6px 0;
+  }
+
+  .bullet-list li {
+    font-size: 10pt;
+    color: #374151;
+    padding-left: 14px;
+    position: relative;
+    margin-bottom: 3px;
+    line-height: 1.5;
+  }
+
+  .bullet-list li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: #1e3a8a;
+    font-weight: 700;
+  }
+
+  @media print {
+    body { padding: 0; }
+    .page { padding: 15mm 18mm; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    ${html.split('<div class="section">')[0]}
+  </div>
+  ${html.includes('<div class="section">') ? '<div class="sections">' + html.split('<div class="section">').slice(1).map(s => '<div class="section">' + s).join('') + '</div>' : ''}
+</div>
+</body>
+</html>`;
 }
+
+export const pdfRouter = router({
+  generate: publicProcedure
+    .input(
+      z.object({
+        resumeText: z.string().min(50),
+        lang: z.enum(["pt", "en"]),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const html = buildResumeHtml(input.resumeText, input.lang);
+
+      let browser;
+      try {
+        browser = await puppeteer.launch({
+          executablePath: "/usr/bin/chromium",
+          headless: true,
+          args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-zygote",
+            "--single-process",
+          ],
+        });
+
+        const page = await browser.newPage();
+        await page.setContent(html, { waitUntil: "networkidle0", timeout: 15000 });
+
+        const pdfBuffer = await page.pdf({
+          format: "A4",
+          printBackground: true,
+          margin: { top: "0mm", bottom: "0mm", left: "0mm", right: "0mm" },
+        });
+
+        const base64 = Buffer.from(pdfBuffer).toString("base64");
+        return { pdf: base64 };
+      } finally {
+        if (browser) await browser.close();
+      }
+    }),
+});
