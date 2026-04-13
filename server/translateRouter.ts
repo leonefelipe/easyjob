@@ -86,19 +86,7 @@ Return JSON:
           { role: "user", content: userMessage },
         ],
         response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "translation_result",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                translatedResume: { type: "string" },
-              },
-              required: ["translatedResume"],
-              additionalProperties: false,
-            },
-          },
+          type: "json_object"
         },
       });
 
