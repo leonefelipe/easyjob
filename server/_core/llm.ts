@@ -142,7 +142,14 @@ const normalizeMessage = (message: Message) => {
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   // Simulação da resposta da API do Manus para análise de currículo
   const mockResponse = {
-    ats_score: 85,
+    atsScore: 85,
+    technicalSkills: [
+      "JavaScript",
+      "TypeScript",
+      "React",
+      "Node.js",
+      "TailwindCSS",
+    ],
     strengths: [
       "Experiência sólida em desenvolvimento Full-Stack.",
       "Conhecimento em tecnologias modernas como Node.js, TypeScript e React.",
@@ -156,11 +163,6 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       "Adicionar certificações em metodologias ágeis (Scrum, Kanban).",
       "Quantificar resultados em projetos anteriores (ex: 'reduzi o tempo de carregamento em X%').",
       "Incluir projetos pessoais ou contribuições open-source para demonstrar proatividade.",
-    ],
-    rewritten_bullets: [
-      "Desenvolvi e otimizei aplicações web e mobile, resultando em um aumento de 20% na satisfação do usuário.",
-      "Liderei a implementação de novas funcionalidades, entregando projetos 15% antes do prazo.",
-      "Colaborei com equipes multifuncionais para garantir a entrega contínua de software de alta qualidade.",
     ],
   };
 
