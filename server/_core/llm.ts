@@ -116,7 +116,7 @@ export type ResponseFormat =
 // Convertemos json_schema → json_object (o prompt já instrui a IA a retornar JSON válido).
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_MODEL = "llama3-8b-8192";
 
 const assertApiKey = () => {
   if (!ENV.forgeApiKey) {
