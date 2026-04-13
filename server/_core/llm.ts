@@ -1,5 +1,3 @@
-import { ENV } from "./env";
-
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
 export type TextContent = {
@@ -185,7 +183,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
     },
-    body: JSON.stringify(payload ),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
