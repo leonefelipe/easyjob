@@ -22,9 +22,9 @@ export type InvokeResult = {
   }>;
 };
 
-// Identificador para o seu modelo atual em 2026
+// Usando o endpoint v1beta para maior compatibilidade com recursos do Gemini 3
 const GEMINI_MODEL = "gemini-3-flash"; 
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const normalizeToGemini = (messages: Message[]) => {
   return messages.map(msg => {
@@ -50,18 +50,15 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   const apiKey = process.env.GOOGLE_API_KEY || ENV.forgeApiKey;
 
   if (!apiKey) {
-    throw new Error("GOOGLE_API_KEY não configurada no Render.");
+    throw new Error("GOOGLE_API_KEY ausente no Render.");
   }
 
-  const isJson = params.responseFormat?.type === "json_object" || params.responseFormat?.type === "json_schema";
-
+  // Payload simplificado ao máximo para evitar erros de validação de campo (400)
   const payload = {
     contents: normalizeToGemini(params.messages),
-    generation_config: {
-      temperature: 0.2,
-      max_output_tokens: params.maxTokens || 8192,
-      // O ajuste vital: snake_case para a API do Google
-      response_mime_type: isJson ? "application/json" : "text/plain",
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: params.maxTokens || 8192
     }
   };
 
